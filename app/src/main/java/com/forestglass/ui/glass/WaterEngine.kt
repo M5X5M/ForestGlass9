@@ -14,13 +14,47 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * محاكاة شبكة موجات مائية ثنائية الأبعاد منخفضة الكلفة:
- * تتوقف تلقائياً عند سكون الماء (صفر استهلاك CPU عند السكون).
+ * حالة الضوء العام على مستوى الشاشة: تُقرأ في مرحلة الرسم فقط (Draw phase)
+ * لتمرير وهج اللمس إلى الخلفية السوداء وإلى البطاقات المجاورة بدون إعادة تركيب Compose.
  */
 @Stable
+class GlobalLightState {
+    var screenX by mutableFloatStateOf(0f)
+    var screenY by mutableFloatStateOf(0f)
+    var intensity by mutableFloatStateOf(0f)
+    var isPressed by mutableFloatStateOf(0f)
+
+    fun inject(x: Float, y: Float, pressed: Boolean) {
+        screenX = x
+        screenY = y
+        isPressed = if (pressed) 1f else 0f
+        if (pressed) intensity = 1f
+    }
+
+    fun move(x: Float, y: Float) {
+        screenX = x
+        screenY = y
+    }
+
+    fun release() {
+        isPressed = 0f
+    }
+
+    fun step(dtSeconds: Float) {
+        val dt = dtSeconds.coerceIn(0.001f, 0.033f)
+        if (isPressed > 0.5f) {
+            intensity = min(1f, intensity + dt * 7f)
+        } else if (intensity > 0.002f) {
+            intensity *= (1f - min(0.92f, dt * 1.85f))
+            if (intensity < 0.002f) intensity = 0f
+        }
+    }
+}
+
+@Stable
 class WaterState(
-    private val cols: Int = 36,
-    private val rows: Int = 20
+    private val cols: Int = 60,
+    private val rows: Int = 34
 ) {
     private val size = cols * rows
     private val hCurr = FloatArray(size)
@@ -33,6 +67,7 @@ class WaterState(
     var touchNormX by mutableFloatStateOf(0.5f)
     var touchNormY by mutableFloatStateOf(0.5f)
     var touchGlow by mutableFloatStateOf(0f)
+    var rippleAge by mutableFloatStateOf(1f)
     var isPressed by mutableFloatStateOf(0f)
     var energy by mutableFloatStateOf(0f)
         private set
@@ -44,42 +79,70 @@ class WaterState(
         touchNormY = ny
         isPressed = if (pressed) 1f else 0f
         if (pressed) {
-            touchGlow = max(touchGlow, 0.95f)
-            val gx = (nx * (cols - 1)).toInt().coerceIn(1, cols - 2)
-            val gy = (ny * (rows - 1)).toInt().coerceIn(1, rows - 2)
-            for (dy in -1..1) {
-                for (dx in -1..1) {
-                    val falloff = if (dx == 0 && dy == 0) 0.95f else 0.45f
-                    val idx = (gy + dy) * cols + (gx + dx)
-                    hCurr[idx] = (hCurr[idx] + falloff).coerceIn(-1.5f, 1.5f)
+            touchGlow = 1f
+            rippleAge = 0f
+            val gx = (nx * (cols - 1)).toInt().coerceIn(2, cols - 3)
+            val gy = (ny * (rows - 1)).toInt().coerceIn(2, rows - 3)
+            for (dy in -2..2) {
+                for (dx in -2..2) {
+                    val dist2 = dx * dx + dy * dy
+                    if (dist2 <= 5) {
+                        val falloff = (1.45f - dist2 * 0.22f).coerceAtLeast(0.25f)
+                        val idx = (gy + dy) * cols + (gx + dx)
+                        hCurr[idx] = (hCurr[idx] + falloff).coerceIn(-1.9f, 1.9f)
+                    }
                 }
             }
             energy = 1f
         }
     }
 
+    fun moveTouch(normX: Float, normY: Float) {
+        val nx = normX.coerceIn(0.02f, 0.98f)
+        val ny = normY.coerceIn(0.02f, 0.98f)
+        val dx = nx - touchNormX
+        val dy = ny - touchNormY
+        touchNormX = nx
+        touchNormY = ny
+        if (dx * dx + dy * dy > 0.0004f) {
+            val gx = (nx * (cols - 1)).toInt().coerceIn(1, cols - 2)
+            val gy = (ny * (rows - 1)).toInt().coerceIn(1, rows - 2)
+            hCurr[gy * cols + gx] = (hCurr[gy * cols + gx] + 0.62f).coerceIn(-1.7f, 1.7f)
+            energy = max(energy, 0.65f)
+        }
+    }
+
+    fun releaseTouch() {
+        isPressed = 0f
+    }
+
     fun step(dtSeconds: Float, tiltX: Float, tiltY: Float) {
         val dt = dtSeconds.coerceIn(0.001f, 0.033f)
 
-        // خفوت الضوء بعد رفع الإصبع
         if (isPressed > 0.5f) {
-            touchGlow = min(1f, touchGlow + dt * 5f)
-        } else if (touchGlow > 0.002f) {
-            touchGlow *= (1f - min(0.95f, dt * 3.8f))
-            if (touchGlow < 0.002f) touchGlow = 0f
+            touchGlow = min(1f, touchGlow + dt * 7f)
+            rippleAge = min(1f, rippleAge + dt * 0.60f)
+        } else {
+            if (touchGlow > 0.002f) {
+                touchGlow *= (1f - min(0.92f, dt * 1.85f))
+                if (touchGlow < 0.002f) touchGlow = 0f
+            }
+            if (rippleAge < 1f) {
+                rippleAge = min(1f, rippleAge + dt * 1.10f)
+            }
         }
 
         val tiltMag = abs(tiltX) + abs(tiltY)
-        if (tiltMag > 0.14f && energy < 0.25f) {
+        if (tiltMag > 0.11f && energy < 0.25f) {
             val ix = ((0.5f + tiltX * 0.35f) * (cols - 1)).toInt().coerceIn(1, cols - 2)
             val iy = ((0.5f + tiltY * 0.35f) * (rows - 1)).toInt().coerceIn(1, rows - 2)
-            hCurr[iy * cols + ix] += tiltMag * 0.12f
-            energy = max(energy, 0.2f)
+            hCurr[iy * cols + ix] += tiltMag * 0.16f
+            energy = max(energy, 0.24f)
         }
 
-        if (energy <= 0.001f && touchGlow <= 0.002f) return
+        if (energy <= 0.001f && touchGlow <= 0.002f && rippleAge >= 1f) return
 
-        val damping = 0.935f
+        val damping = 0.960f
         var maxEnergy = 0f
         for (y in 1 until rows - 1) {
             val rowOff = y * cols
@@ -87,21 +150,19 @@ class WaterState(
                 val i = rowOff + x
                 val avg = (hCurr[i - 1] + hCurr[i + 1] + hCurr[i - cols] + hCurr[i + cols]) * 0.5f
                 val v = (avg - hPrev[i]) * damping
-                val clamped = v.coerceIn(-1.4f, 1.4f)
+                val clamped = v.coerceIn(-1.7f, 1.7f)
                 hNext[i] = clamped
                 val a = abs(clamped)
                 if (a > maxEnergy) maxEnergy = a
             }
         }
 
-        // تبديل المصفوفات بدون أي حجز ذاكرة
         for (i in 0 until size) {
             hPrev[i] = hCurr[i]
             hCurr[i] = hNext[i]
         }
         energy = maxEnergy
 
-        // ترميز الارتفاع والميل داخل Bitmap خفيف جداً
         for (y in 0 until rows) {
             val rowOff = y * cols
             for (x in 0 until cols) {
@@ -111,8 +172,8 @@ class WaterState(
                 val u = if (y > 0) hCurr[i - cols] else hCurr[i]
                 val d = if (y < rows - 1) hCurr[i + cols] else hCurr[i]
 
-                val nx = ((r - l) * 0.5f + 0.5f).coerceIn(0f, 1f)
-                val ny = ((d - u) * 0.5f + 0.5f).coerceIn(0f, 1f)
+                val nx = ((r - l) * 0.85f + 0.5f).coerceIn(0f, 1f)
+                val ny = ((d - u) * 0.85f + 0.5f).coerceIn(0f, 1f)
                 val h = (hCurr[i] * 0.5f + 0.5f).coerceIn(0f, 1f)
 
                 val ir = (nx * 255f).toInt()
@@ -134,45 +195,68 @@ object WaterShaderFactory {
         uniform float2 uSize;
         uniform float2 uWaveSize;
         uniform float2 uTouch;
+        uniform float2 uGlobalTouch;
         uniform float2 uTilt;
         uniform float uGlow;
+        uniform float uGlobalGlow;
+        uniform float uRippleAge;
         uniform float uSelected;
-        uniform float uRadius;
         uniform shader uWave;
 
         half4 main(float2 fragCoord) {
             float2 uv = fragCoord / max(uSize, float2(1.0));
+            float aspect = uSize.x / max(uSize.y, 1.0);
             float2 wCoord = uv * uWaveSize;
             half4 wSample = uWave.eval(wCoord);
 
             float2 normal = (float2(wSample.rg) - 0.5) * 2.0;
             float height = (float(wSample.b) - 0.5) * 2.0;
 
-            // إضاءة الغابة السائلة العميقة + ميلان الجهاز
-            float2 lightPos = float2(0.5 + uTilt.x * 0.28, 0.18 + uTilt.y * 0.22);
-            float ambient = exp(-distance(uv, lightPos) * 2.1) * 0.14;
+            // 1) عمق الزجاج وإضاءة الغابة المائلة مع الجيروسكوب
+            float2 lightPos = float2(0.5 + uTilt.x * 0.34, 0.14 + uTilt.y * 0.25);
+            float ambient = exp(-distance(uv, lightPos) * 2.2) * 0.18;
 
-            // إضاءة اللمس الفيروزية الناعمة المنتشرة في الماء
-            float2 dTouch = (uv - uTouch) * float2(uSize.x / max(uSize.y, 1.0), 1.0);
+            // 2) لمعة السطح العلوي والحافة الداخلية
+            float topSheen = (1.0 - smoothstep(0.0, 0.24, uv.y)) * (0.12 + max(0.0, -uTilt.y) * 0.14);
+            float bottomSheen = smoothstep(0.80, 1.0, uv.y) * 0.06;
+
+            // 3) وهج الإصبع المباشر (هالة فيروزية واسعة + نواة بيضاء ساطعة)
+            float2 dTouch = (uv - uTouch) * float2(aspect, 1.0);
             float dist = length(dTouch);
-            float touchLight = exp(-dist * 3.4) * uGlow * 0.52;
+            float glowWide = exp(-dist * 2.15) * uGlow * 0.88;
+            float glowCore = exp(-dist * 6.4) * uGlow * 0.68;
 
-            // لمعان الموجة (Caustics)
-            float waveHighlight = clamp((normal.x * 0.7 + normal.y * 0.7 + height * 0.4), 0.0, 1.0);
-            float caustic = waveHighlight * (0.14 + uGlow * 0.22);
+            // 4) تسرّب النور من البطاقات المجاورة على الشاشة
+            float2 dGlobal = (uv - uGlobalTouch) * float2(aspect, 1.0);
+            float gDist = length(dGlobal);
+            float globalBleed = exp(-gDist * 2.25) * uGlobalGlow * 0.36;
 
-            // لمعان الحافة العلوية المائل مع الجيروسكوب
-            float topRim = smoothstep(0.28, 0.0, uv.y) * (0.08 + max(0.0, -uTilt.y) * 0.12);
-            float selectTint = uSelected * 0.16;
+            // 5) إضاءة Blinn-Phong ثلاثية الأبعاد على قمم موجات الماء فقط
+            float waveAmp = clamp(length(normal) * 2.2 + abs(height) * 1.4, 0.0, 1.0);
+            float3 n3 = normalize(float3(normal.x * 1.65, normal.y * 1.65, 1.0));
+            float3 l3 = normalize(float3(uTouch.x - uv.x, uTouch.y - uv.y, 0.36));
+            float3 h3 = normalize(l3 + float3(0.0, 0.0, 1.0));
+            float ndh = max(dot(n3, h3), 0.0);
+            float ndh2 = ndh * ndh;
+            float spec8 = ndh2 * ndh2 * ndh2 * ndh2;
+            float waterSpec = spec8 * waveAmp * (0.28 + uGlow * 0.92);
 
-            half3 baseCol = half3(0.028, 0.075, 0.078);
-            half3 mintCol = half3(0.37, 0.83, 0.72);
+            // 6) موجة حلقية متسعة من نقطة الضغط
+            float ringRadius = uRippleAge * 1.05;
+            float ringBand = exp(-abs(dist - ringRadius) * 18.0) * (1.0 - uRippleAge) * uGlow * 0.58;
 
-            half3 finalCol = baseCol
-                + mintCol * half(ambient + touchLight + caustic + topRim + selectTint);
+            float selectTint = uSelected * 0.20;
 
-            float alpha = clamp(0.76 + touchLight * 0.2 + selectTint * 0.25, 0.76, 0.96);
-            return half4(finalCol * alpha, alpha);
+            half3 deepGlass = half3(0.012, 0.042, 0.046);
+            half3 cyanLight = half3(0.22, 0.92, 0.83);
+            half3 whiteCore = half3(0.88, 1.0, 0.98);
+
+            half3 col = deepGlass
+                + cyanLight * half(ambient + topSheen + bottomSheen + glowWide + globalBleed + ringBand * 0.85 + selectTint)
+                + whiteCore * half(glowCore + waterSpec + ringBand * 0.35);
+
+            float alpha = clamp(0.82 + glowWide * 0.16 + globalBleed * 0.12 + selectTint * 0.14, 0.82, 0.98);
+            return half4(col * alpha, alpha);
         }
     """
 
