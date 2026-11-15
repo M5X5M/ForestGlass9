@@ -7,33 +7,41 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.unit.IntOffset
 
 object ForestMotion {
-    val SmoothEasing = CubicBezierEasing(0.22f, 1.0f, 0.36f, 1.0f)
+    val SmoothEasing = CubicBezierEasing(0.16f, 1.0f, 0.30f, 1.0f)
 
     fun <T> liquidSpring() = spring<T>(
-        dampingRatio = Spring.DampingRatioNoBouncy,
-        stiffness = 380f
+        dampingRatio = 0.80f,
+        stiffness = 320f
     )
 
     fun <T> tapSpring() = spring<T>(
-        dampingRatio = 0.78f,
-        stiffness = 550f
+        dampingRatio = 0.65f,
+        stiffness = 500f
     )
 
     fun <T> pulseSpring() = spring<T>(
-        dampingRatio = 0.55f,
-        stiffness = 520f
+        dampingRatio = 0.50f,
+        stiffness = 460f
     )
 
     fun intOffsetSpring() = spring<IntOffset>(
         dampingRatio = Spring.DampingRatioNoBouncy,
-        stiffness = 400f
+        stiffness = 380f
     )
 
     val screenTransition: ContentTransform
-        get() = (fadeIn(animationSpec = tween(durationMillis = 220, delayMillis = 40, easing = SmoothEasing)))
-            .togetherWith(fadeOut(animationSpec = tween(durationMillis = 130, easing = SmoothEasing)))
+        get() = (
+            fadeIn(animationSpec = tween(durationMillis = 250, delayMillis = 30, easing = SmoothEasing)) +
+                scaleIn(
+                    initialScale = 0.978f,
+                    animationSpec = tween(durationMillis = 260, delayMillis = 30, easing = SmoothEasing)
+                )
+            ).togetherWith(
+                fadeOut(animationSpec = tween(durationMillis = 120, easing = SmoothEasing))
+            )
 }
