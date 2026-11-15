@@ -1,0 +1,7 @@
+HSPLandroidx/compose/**;->**(**)**
+HSPLandroidx/activity/**;->**(**)**
+HSPLandroidx/lifecycle/**;->**(**)**
+HSPLandroidx/room/**;->**(**)**
+HSPLcom/forestglass/**;->**(**)**
+Landroidx/compose/**;
+Lcom/forestglass/**;
