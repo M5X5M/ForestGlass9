@@ -1,18 +1,21 @@
 package com.forestglass.ui
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -24,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalView
@@ -65,6 +69,8 @@ fun GlassBottomBar(
     modifier: Modifier = Modifier
 ) {
     val view = LocalView.current
+    val activeIndex = MainTab.entries.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0)
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -79,70 +85,91 @@ fun GlassBottomBar(
                 .widthIn(max = 560.dp)
                 .fillMaxWidth()
         ) {
-            Row(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 8.dp, vertical = 7.dp)
             ) {
-                MainTab.entries.forEach { tab ->
-                    val selected = currentRoute == tab.route
-                    val tint by animateColorAsState(
-                        targetValue = if (selected) ForestTokens.MintGlow else ForestTokens.TextSecondary,
-                        animationSpec = ForestMotion.liquidSpring(),
-                        label = "tabTint"
-                    )
-                    val bg by animateColorAsState(
-                        targetValue = if (selected) ForestTokens.MintSoft else Color.Transparent,
-                        animationSpec = ForestMotion.liquidSpring(),
-                        label = "tabBg"
-                    )
-                    val scale by animateFloatAsState(
-                        targetValue = if (selected) 1.03f else 1f,
-                        animationSpec = ForestMotion.tapSpring(),
-                        label = "tabScale"
-                    )
-                    val interaction = remember { MutableInteractionSource() }
+                val tabWidth = maxWidth / MainTab.entries.size
+                val indicatorOffset by animateDpAsState(
+                    targetValue = tabWidth * activeIndex,
+                    animationSpec = ForestMotion.liquidSpring(),
+                    label = "tabSlide"
+                )
 
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .graphicsLayer {
-                                scaleX = scale
-                                scaleY = scale
-                            }
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(bg)
-                            .clickable(
-                                interactionSource = interaction,
-                                indication = null
-                            ) {
-                                ForestHaptics.select(view)
-                                onSelectTab(tab)
-                            }
-                            .padding(vertical = 8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        ForestIcon(icon = tab.icon, size = 21.dp, tint = tint)
-                        Spacer(Modifier.height(3.dp))
-                        Text(
-                            text = tab.label,
-                            color = tint,
-                            fontSize = 11.sp,
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                            maxLines = 1
-                        )
-                        Spacer(Modifier.height(3.dp))
-                        Box(
-                            modifier = Modifier
-                                .width(if (selected) 18.dp else 0.dp)
-                                .height(2.5.dp)
-                                .background(
-                                    if (selected) ForestTokens.MintGlow else Color.Transparent,
-                                    RoundedCornerShape(2.dp)
+                Box(
+                    modifier = Modifier
+                        .offset(x = indicatorOffset)
+                        .width(tabWidth)
+                        .height(52.dp)
+                        .padding(horizontal = 4.dp)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    ForestTokens.MintGlow.copy(alpha = 0.34f),
+                                    Color.Transparent
                                 )
+                            ),
+                            shape = RoundedCornerShape(18.dp)
+                        ),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(26.dp)
+                            .height(2.5.dp)
+                            .background(ForestTokens.MintCore, RoundedCornerShape(2.dp))
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MainTab.entries.forEach { tab ->
+                        val selected = currentRoute == tab.route
+                        val tint by animateColorAsState(
+                            targetValue = if (selected) ForestTokens.MintGlow else ForestTokens.TextSecondary,
+                            animationSpec = ForestMotion.liquidSpring(),
+                            label = "tabTint"
                         )
+                        val scale by animateFloatAsState(
+                            targetValue = if (selected) 1.06f else 1f,
+                            animationSpec = ForestMotion.tapSpring(),
+                            label = "tabScale"
+                        )
+                        val interaction = remember { MutableInteractionSource() }
+
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(52.dp)
+                                .graphicsLayer {
+                                    scaleX = scale
+                                    scaleY = scale
+                                }
+                                .clip(RoundedCornerShape(18.dp))
+                                .clickable(
+                                    interactionSource = interaction,
+                                    indication = null
+                                ) {
+                                    ForestHaptics.select(view)
+                                    onSelectTab(tab)
+                                },
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            ForestIcon(icon = tab.icon, size = 21.dp, tint = tint)
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                text = tab.label,
+                                color = tint,
+                                fontSize = 11.sp,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }
