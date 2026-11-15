@@ -5,19 +5,21 @@ import androidx.compose.ui.unit.dp
 
 object ForestTokens {
     val BlackOled = Color(0xFF000000)
-    val GlassBase = Color(0xFF071314)
-    val GlassSurfaceLite = Color(0xCC0A181A)
-    val GlassBorder = Color(0x337CEAD2)
-    val GlassBorderFocused = Color(0x886EEAD0)
+    val GlassBase = Color(0xFF030B0C)
+    val GlassSurfaceLite = Color(0xD9051416)
+    val GlassBorder = Color(0x4A69EAD8)
+    val GlassBorderTop = Color(0x94C2FFF5)
+    val GlassBorderFocused = Color(0xBD73F5E2)
 
-    val MintGlow = Color(0xFF5FD3B8)
-    val MintSoft = Color(0x265FD3B8)
-    val MintPressed = Color(0x385FD3B8)
-    val MintBadge = Color(0x1F5FD3B8)
+    val MintGlow = Color(0xFF44EAD4)
+    val MintCore = Color(0xFFE0FFFA)
+    val MintSoft = Color(0x3044EAD4)
+    val MintPressed = Color(0x4D44EAD4)
+    val MintBadge = Color(0x2644EAD4)
 
-    val TextPrimary = Color(0xFFF3FAF8)
-    val TextSecondary = Color(0xFFA2BBB6)
-    val TextMuted = Color(0xFF6B847F)
+    val TextPrimary = Color(0xFFF5FCFB)
+    val TextSecondary = Color(0xFFA9C5C0)
+    val TextMuted = Color(0xFF6B8782)
     val Danger = Color(0xFFFF6B7A)
     val Warning = Color(0xFFFFC86B)
 
