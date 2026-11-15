@@ -52,7 +52,7 @@ object PhysicsIndex {
         var lastWasSpace = true
         for (ch in raw) {
             when (ch) {
-                in '\u064B'..'\u065F', '\u0670', '\u0640' -> Unit // حذف التشكيل والتطويل
+                in '\u064B'..'\u065F', '\u0670', '\u0640' -> Unit
                 'أ', 'إ', 'آ', 'ٱ' -> { sb.append('ا'); lastWasSpace = false }
                 'ة' -> { sb.append('ه'); lastWasSpace = false }
                 'ى' -> { sb.append('ي'); lastWasSpace = false }
@@ -81,33 +81,36 @@ object PhysicsIndex {
         val tokens = q.split(' ').filter { it.isNotEmpty() }
         return laws.mapNotNull { law ->
             val titleNorm = normalizeArabic(law.title)
+            val titleWords = titleNorm.split(' ').filter { it.isNotEmpty() }
             val chapterNorm = normalizeArabic(law.chapter)
             val notesNorm = normalizeArabic(law.notes)
             val formulaNorm = law.formula.lowercase()
             val combined = "$titleNorm $chapterNorm $notesNorm $formulaNorm"
 
             var score = 0f
-            if (titleNorm == q) score += 12f
-            if (titleNorm.contains(q)) score += 6f
+            if (titleNorm == q) score += 20f
+            if (titleWords.contains(q)) score += 10f
+            if (titleNorm.contains(q)) score += 4f
             if (formulaNorm.contains(q)) score += 5f
-            if (chapterNorm.contains(q) || notesNorm.contains(q)) score += 3f
+            if (chapterNorm.contains(q) || notesNorm.contains(q)) score += 2f
 
             var tokenHits = 0
             for (t in tokens) {
                 when {
-                    titleNorm.contains(t) -> { score += 3.5f; tokenHits++ }
-                    combined.contains(t) -> { score += 2.0f; tokenHits++ }
+                    titleWords.contains(t) -> { score += 6f; tokenHits++ }
+                    titleNorm.contains(t) -> { score += 2.5f; tokenHits++ }
+                    combined.contains(t) -> { score += 1.5f; tokenHits++ }
                     else -> {
                         val fuzzy = bestTokenSimilarity(t, titleNorm)
                         if (fuzzy >= 0.72f) {
-                            score += fuzzy * 2.2f
+                            score += fuzzy * 2.0f
                             tokenHits++
                         }
                     }
                 }
             }
 
-            if (tokens.size > 1 && tokenHits == tokens.size) score += 2.5f
+            if (tokens.size > 1 && tokenHits == tokens.size) score += 3f
             if (score >= 1.5f) SearchMatch(law, score) else null
         }
             .sortedByDescending { it.score }
