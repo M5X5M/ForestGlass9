@@ -37,8 +37,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -64,6 +68,8 @@ import com.forestglass.ui.AppRoute
 import com.forestglass.ui.GlassBottomBar
 import com.forestglass.ui.glass.GlassCard
 import com.forestglass.ui.glass.GlassTier
+import com.forestglass.ui.glass.GlobalLightState
+import com.forestglass.ui.glass.LocalGlobalLight
 import com.forestglass.ui.glass.LocalTiltState
 import com.forestglass.ui.screens.AccountScreen
 import com.forestglass.ui.screens.DEFAULT_EMERGENCY_PIN
@@ -123,6 +129,18 @@ private fun ForestGlassRoot(activity: ComponentActivity) {
     val tiltSensor = remember {
         TiltSensor(context) { x, y -> tiltState = TiltState(x, y) }
     }
+    val globalLight = remember { GlobalLightState() }
+
+    LaunchedEffect(globalLight.isPressed, globalLight.intensity > 0.002f) {
+        var lastNs = 0L
+        while (globalLight.isPressed > 0.5f || globalLight.intensity > 0.002f) {
+            withFrameNanos { ns ->
+                val dt = if (lastNs == 0L) 1f / 60f else (ns - lastNs) / 1_000_000_000f
+                lastNs = ns
+                globalLight.step(dt)
+            }
+        }
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -139,7 +157,6 @@ private fun ForestGlassRoot(activity: ComponentActivity) {
         }
     }
 
-    // إدارة ملء الشاشة وإبقاء الشاشة مضاءة وتدوير الهاتف أفقياً عند تكبير الفيديو
     LaunchedEffect(isVideoFullscreen, route) {
         val activeFullscreen = isVideoFullscreen && route == AppRoute.LESSONS
         val window = activity.window
@@ -175,12 +192,32 @@ private fun ForestGlassRoot(activity: ComponentActivity) {
 
     CompositionLocalProvider(
         LocalLayoutDirection provides LayoutDirection.Rtl,
-        LocalTiltState provides tiltState
+        LocalTiltState provides tiltState,
+        LocalGlobalLight provides globalLight
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(ForestTokens.BlackOled)
+                .drawBehind {
+                    val g = globalLight.intensity
+                    if (g > 0.005f && route != AppRoute.DECOY) {
+                        val radius = size.minDimension * 0.52f
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    ForestTokens.MintGlow.copy(alpha = g * 0.22f),
+                                    ForestTokens.MintGlow.copy(alpha = g * 0.06f),
+                                    Color.Transparent
+                                ),
+                                center = Offset(globalLight.screenX, globalLight.screenY),
+                                radius = radius
+                            ),
+                            radius = radius,
+                            center = Offset(globalLight.screenX, globalLight.screenY)
+                        )
+                    }
+                }
         ) {
             val showBottomBar = !isVideoFullscreen &&
                 route in setOf(AppRoute.HOME, AppRoute.LESSONS, AppRoute.PROGRESS, AppRoute.ACCOUNT)
